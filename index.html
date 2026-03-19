@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>重金属行情看板 V3 · Metal Market Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c12;
+      --surface: #13161f;
+      --surface2: #1a1e2a;
+      --surface3: #20253380;
+      --border: #262c3e;
+      --border2: #2e3550;
+      --accent: #f0b429;
+      --green: #2ec4a9;
+      --red: #e85d4a;
+      --blue: #4d9ef6;
+      --purple: #a78bfa;
+      --text: #e8eaf0;
+      --text2: #8b90a0;
+      --text3: #4a5068;
+      --gold: #f0b429;
+      --silver: #c0c8d8;
+      --copper: #d4845a;
+      --platinum: #a8c4d4;
+      --palladium: #b4a8d4;
+      --radius: 14px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Helvetica Neue', sans-serif; min-height: 100vh; }
+
+    /* ========= HEADER ========= */
+    .header {
+      background: linear-gradient(180deg, #13161fee 0%, #13161fcc 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 68px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 200;
+      backdrop-filter: blur(20px);
+    }
+    .header-logo { display: flex; align-items: center; gap: 12px; }
+    .header-logo .icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #f0b429 0%, #d4845a 100%);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800;
+      box-shadow: 0 0 16px #f0b42966;
+    }
+    .header-logo h1 {
+      font-size: 17px; font-weight: 800;
+      background: linear-gradient(90deg, #f0b429, #ffd47a);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-logo .sub { font-size: 11px; color: var(--text3); -webkit-text-fill-color: var(--text3); margin-top: 1px; letter-spacing: 0.3px; }
+    .header-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    /* Clock strip */
+    .clock-strip { display: flex; align-items: center; gap: 12px; }
+    .clock-item { text-align: center; }
+    .clock-city { font-size: 9px; color: var(--text3); letter-spacing: 0.8px; text-transform: uppercase; }
+    .clock-time { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text2); }
+    .clock-sep { width: 1px; height: 28px; background: var(--border); }
+    /* Status */
+    .status-wrap { display: flex; align-items: center; gap: 6px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 2s infinite; }
+    .status-dot.offline { background: var(--red); }
+    .status-dot.simulated { background: var(--accent); animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .status-text { font-size: 11px; color: var(--text2); }
+    .source-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+    .source-badge.live { background: rgba(46,196,169,0.12); color: var(--green); }
+    .source-badge.sim { background: rgba(240,180,41,0.12); color: var(--accent); }
+    /* Buttons */
+    .btn {
+      padding: 7px 16px; border-radius: 9px; border: 1px solid var(--border2);
+      background: var(--surface2); color: var(--text); font-size: 12px;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(240,180,41,0.08); }
+    .btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .btn-danger { border-color: rgba(232,93,74,0.4); color: var(--red); }
+    .btn-danger:hover { background: rgba(232,93,74,0.1); border-color: var(--red); color: var(--red); }
+    .currency-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border2); border-radius: 9px; overflow: hidden; }
+    .currency-toggle button { padding: 6px 14px; border: none; background: transparent; color: var(--text2); font-size: 12px; cursor: pointer; transition: all 0.2s; }
+    .currency-toggle button.active { background: var(--accent); color: #000; font-weight: 700; }
+    /* Countdown ring */
+    .refresh-wrap { display: flex; align-items: center; gap: 8px; }
+    .countdown-ring { position: relative; width: 32px; height: 32px; cursor: pointer; }
+    .countdown-ring svg { transform: rotate(-90deg); }
+    .countdown-ring .ring-bg { fill: none; stroke: var(--border2); stroke-width: 3; }
+    .countdown-ring .ring-progress { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 0.5s linear; }
+    .countdown-ring .ring-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--accent); }
+
+    /* ========= MAIN ========= */
+    .main { max-width: 1440px; margin: 0 auto; padding: 24px 20px 40px; }
+    .section-title {
+      font-size: 11px; font-weight: 700; color: var(--text3);
+      text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ========= TOP BAR: EXCHANGE RATE + FEAR/GREED ========= */
+    .top-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }
+    @media (max-width: 800px) { .top-bar { grid-template-columns: 1fr; } }
+    .top-bar-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+    .top-bar-card h3 { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    /* Rates */
+    .rate-list { display: flex; gap: 20px; flex-wrap: wrap; }
+    .rate-item { text-align: center; }
+    .rate-pair { font-size: 10px; color: var(--text3); margin-bottom: 3px; letter-spacing: 0.5px; }
+    .rate-val { font-size: 17px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+    .rate-chg { font-size: 10px; margin-top: 2px; }
+    /* Fear & Greed */
+    .fg-wrap { display: flex; align-items: center; gap: 20px; }
+    .fg-meter { position: relative; width: 100px; height: 56px; overflow: hidden; }
+    .fg-meter canvas { position: absolute; top: 0; left: 0; }
+    .fg-value { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: 800; }
+    .fg-labels { flex: 1; }
+    .fg-label { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+    .fg-desc { font-size: 11px; color: var(--text3); line-height: 1.5; }
+    .fg-bar-wrap { margin-top: 10px; }
+    .fg-bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #2ec4a9, #f0b429, #e85d4a); margin-bottom: 4px; }
+    .fg-indicator { width: 10px; height: 10px; border-radius: 50%; background: white; border: 2px solid #000; margin-top: -8px; transition: margin-left 0.8s ease; }
+
+    /* ========= METALS GRID ========= */
+    .metals-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 22px; }
+    @media (max-width: 1100px) { .metals-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 700px) { .metals-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .metals-grid { grid-template-columns: 1fr; } }
+    .metal-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 16px 14px; cursor: pointer; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .metal-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--card-color, var(--accent)); border-radius: 3px 3px 0 0;
+    }
+    .metal-card:hover { border-color: var(--card-color, var(--accent)); transform: translateY(-3px); box-shadow: 0 12px 36px rgba(0,0,0,0.4); }
+    .metal-card.selected { border-color: var(--card-color, var(--accent)); background: var(--surface2); box-shadow: 0 0 0 1px var(--card-color, var(--accent))33; }
+    /* price flash */
+    @keyframes flashUp { 0%{ background:#2ec4a920 } 100%{ background:transparent } }
+    @keyframes flashDown { 0%{ background:#e85d4a20 } 100%{ background:transparent } }
+    .metal-card.flash-up { animation: flashUp 0.8s ease; }
+    .metal-card.flash-down { animation: flashDown 0.8s ease; }
+    .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .metal-icon {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 800;
+      background: rgba(255,255,255,0.04); color: var(--card-color, var(--accent));
+      border: 1.5px solid var(--card-color, var(--accent))66;
+    }
+    .metal-right { text-align: right; }
+    .metal-en { font-size: 10px; color: var(--text3); letter-spacing: 0.5px; }
+    .metal-rank { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-top: 3px; }
+    .metal-rank.top { background: rgba(46,196,169,0.12); color: var(--green); }
+    .metal-rank.bot { background: rgba(232,93,74,0.12); color: var(--red); }
+    .metal-name { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+    .metal-price { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; line-height: 1; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+    .metal-price .unit { font-size: 11px; font-weight: 400; color: var(--text3); margin-left: 3px; }
+    .metal-change { display: flex; align-items: center; gap: 6px; }
+    .change-pill { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 7px; }
+    .change-pill.up { background: rgba(46,196,169,0.12); color: var(--green); }
+    .change-pill.down { background: rgba(232,93,74,0.12); color: var(--red); }
+    .change-pill.flat { background: rgba(138,144,160,0.1); color: var(--text2); }
+    .change-abs { font-size: 11px; color: var(--text3); }
+    .mini-chart-wrap { margin-top: 12px; height: 40px; }
+
+    /* ========= RANKING BAR ========= */
+    .ranking-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 22px; }
+    .ranking-inner { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    @media (max-width: 800px) { .ranking-inner { grid-template-columns: repeat(3, 1fr); } }
+    .rank-item { display: flex; align-items: center; gap: 10px; }
+    .rank-num { font-size: 18px; font-weight: 900; color: var(--border2); width: 24px; text-align: right; }
+    .rank-bar-wrap { flex: 1; }
+    .rank-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .rank-bar { height: 4px; border-radius: 2px; transition: width 0.6s ease; }
+    .rank-pct { font-size: 12px; font-weight: 700; }
+
+    /* ========= CHART ========= */
+    .chart-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 22px; }
+    .chart-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .chart-meta { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    .chart-title-wrap .chart-title { font-size: 15px; font-weight: 700; }
+    .chart-title-wrap .chart-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .chart-price-large { font-size: 30px; font-weight: 900; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
+    .chart-change-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+    .chart-timeframes { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chart-container { position: relative; height: 260px; }
+    .chart-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    @media (max-width: 600px) { .chart-stats { grid-template-columns: repeat(2, 1fr); } }
+    .stat-item { text-align: center; }
+    .stat-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .stat-value { font-size: 14px; font-weight: 700; }
+
+    /* ========= BOTTOM GRID ========= */
+    .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 22px; }
+    @media (max-width: 960px) { .bottom-grid { grid-template-columns: 1fr; } }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .panel-title { font-size: 14px; font-weight: 700; }
+    .panel-body { padding: 16px 20px; }
+    /* Position Panel */
+    .pos-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .pos-summary-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+    .pos-summary-label { font-size: 10px; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pos-summary-val { font-size: 18px; font-weight: 800; }
+    .pos-summary-val.profit { color: var(--green); }
+    .pos-summary-val.loss { color: var(--red); }
+    /* Donut chart */
+    .pos-chart-wrap { display: flex; align-items: center; gap: 20px; margin-bottom: 14px; }
+    .pos-donut { width: 100px; height: 100px; flex-shrink: 0; }
+    .pos-legend { flex: 1; }
+    .pos-legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+    .pos-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Form */
+    .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .form-row .input { flex: 1; min-width: 80px; }
+    .input {
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px;
+      color: var(--text); padding: 7px 12px; font-size: 12px; outline: none; transition: border 0.2s; width: 100%;
+    }
+    .input:focus { border-color: var(--accent); }
+    select.input option { background: var(--surface2); }
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { text-align: left; padding: 7px 10px; color: var(--text3); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+    tbody td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--surface2); }
+    .pnl-cell { font-size: 13px; font-weight: 700; }
+    .pnl-cell.profit { color: var(--green); }
+    .pnl-cell.loss { color: var(--red); }
+    /* Alerts */
+    .alert-list { max-height: 220px; overflow-y: auto; }
+    .alert-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; background: rgba(240,180,41,0.12); color: var(--accent); }
+    .alert-triggered { padding: 2px 8px; border-radius: 4px; font-size: 10px; background: rgba(46,196,169,0.12); color: var(--green); }
+    .alert-del { color: var(--text3); cursor: pointer; padding: 3px 6px; border-radius: 4px; font-size: 12px; }
+    .alert-del:hover { color: var(--red); background: rgba(232,93,74,0.1); }
+    /* History */
+    .history-panel { margin-bottom: 22px; }
+    /* Tags */
+    .tag { display: inline-flex; align-items: center; font-size: 10px; padding: 2px 7px; border-radius: 6px; }
+    .tag.green { background: rgba(46,196,169,0.12); color: var(--green); }
+    .tag.amber { background: rgba(240,180,41,0.12); color: var(--accent); }
+    .tag.red { background: rgba(232,93,74,0.12); color: var(--red); }
+    /* Toast */
+    #toastContainer { position: fixed; bottom: 28px; right: 28px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast-item { background: var(--surface2); border: 1px solid var(--border2); border-radius: 12px; padding: 10px 18px; font-size: 13px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow); animation: slideUp 0.3s ease; pointer-events: auto; max-width: 360px; }
+    @keyframes slideUp { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateY(0); opacity: 1; } to { transform: translateY(14px); opacity: 0; } }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    /* Misc */
+    .divider { height: 1px; background: var(--border); margin: 14px 0; }
+    .empty-hint { text-align: center; color: var(--text3); font-size: 12px; padding: 20px; }
+    /* Responsive header on mobile */
+    @media (max-width: 900px) { .clock-strip { display: none; } }
+    @media (max-width: 600px) { .header { padding: 0 14px; } .main { padding: 14px 10px 30px; } }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-logo">
+    <div class="icon">⚡</div>
+    <div>
+      <h1>Metal Market Dashboard</h1>
+      <div class="sub">重金属行情看板 · V3 · 5秒实时更新</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <!-- Multi-timezone Clock -->
+    <div class="clock-strip">
+      <div class="clock-item">
+        <div class="clock-city">上海</div>
+        <div class="clock-time" id="clk-cst">--:--</div>
+      </div>
+      <div class="clock-sep"></div>
+      <div class="clock-item">
+        <div class="clock-city">伦敦</div>
+        <div class="clock-time" id="clk-lon">--:--</div>
+      </div>
+      <div class="clock-sep"></div>
+      <div class="clock-item">
+        <div class="clock-city">纽约</div>
+        <div class="clock-time" id="clk-nyc">--:--</div>
+      </div>
+    </div>
+    <!-- Status -->
+    <div class="status-wrap">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="lastUpdate">加载中…</span>
+      <span class="source-badge" id="sourceBadge">API</span>
+    </div>
+    <!-- Currency -->
+    <div class="currency-toggle">
+      <button id="btnUSD" onclick="setCurrency('USD')">USD/oz</button>
+      <button class="active" id="btnCNY" onclick="setCurrency('CNY')">CNY/g</button>
+    </div>
+    <!-- Refresh ring -->
+    <div class="refresh-wrap">
+      <div class="countdown-ring" id="ringWrap" onclick="manualRefresh()" title="点击立即刷新">
+        <svg viewBox="0 0 32 32" width="32" height="32">
+          <circle class="ring-bg" cx="16" cy="16" r="13"/>
+          <circle class="ring-progress" id="ringProgress" cx="16" cy="16" r="13" stroke-dasharray="81.7" stroke-dashoffset="0"/>
+        </svg>
+        <div class="ring-text" id="ringText">5</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Top Bar: Exchange Rates + Fear/Greed -->
+  <div class="top-bar">
+    <!-- Exchange Rates -->
+    <div class="top-bar-card">
+      <h3>💱 汇率参考</h3>
+      <div class="rate-list" id="rateList"></div>
+    </div>
+    <!-- Fear & Greed Index -->
+    <div class="top-bar-card">
+      <h3>🧭 市场情绪指数</h3>
+      <div class="fg-wrap">
+        <div class="fg-meter">
+          <canvas id="fgCanvas" width="100" height="100"></canvas>
+          <div class="fg-value" id="fgVal" style="color:#f0b429">--</div>
+        </div>
+        <div class="fg-labels">
+          <div class="fg-label" id="fgLabel">--</div>
+          <div class="fg-desc" id="fgDesc">--</div>
+          <div class="fg-bar-wrap">
+            <div class="fg-bar"></div>
+            <div class="fg-indicator" id="fgIndicator" style="margin-left:50%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Real-time Prices -->
+  <div class="section-title">实时现货行情 <span id="priceStatus" style="color:var(--text3);font-weight:400;font-size:10px"></span></div>
+  <div class="metals-grid" id="metalsGrid"></div>
+
+  <!-- Ranking -->
+  <div class="section-title">涨跌排行</div>
+  <div class="ranking-panel">
+    <div class="ranking-inner" id="rankingInner"></div>
+  </div>
+
+  <!-- Chart -->
+  <div class="section-title">价格走势图</div>
+  <div class="chart-panel">
+    <div class="chart-top">
+      <div>
+        <div class="chart-title-wrap">
+          <div class="chart-title" id="chartTitle">黄金 · Gold</div>
+          <div class="chart-sub" id="chartSub">实时价格走势</div>
+        </div>
+        <div class="chart-change-row">
+          <div class="chart-price-large" id="chartPriceLarge" style="color:var(--gold)">—</div>
+          <div id="chartChangeBadge" class="change-pill flat">—</div>
+          <div id="chartChangeAbs" style="font-size:12px;color:var(--text3)"></div>
+        </div>
+      </div>
+      <div class="chart-timeframes">
+        <button class="btn active" data-tf="24h" onclick="setTimeframe('24h',this)">24H</button>
+        <button class="btn" data-tf="7d" onclick="setTimeframe('7d',this)">7D</button>
+        <button class="btn" data-tf="30d" onclick="setTimeframe('30d',this)">30D</button>
+        <button class="btn" data-tf="90d" onclick="setTimeframe('90d',this)">90D</button>
+      </div>
+    </div>
+    <div class="chart-container"><canvas id="mainChart"></canvas></div>
+    <div class="chart-stats">
+      <div class="stat-item"><div class="stat-label">区间最高</div><div class="stat-value" id="statHigh" style="color:var(--green)">—</div></div>
+      <div class="stat-item"><div class="stat-label">区间最低</div><div class="stat-value" id="statLow" style="color:var(--red)">—</div></div>
+      <div class="stat-item"><div class="stat-label">区间均价</div><div class="stat-value" id="statAvg">—</div></div>
+      <div class="stat-item"><div class="stat-label">波动幅度</div><div class="stat-value" id="statVol">—</div></div>
+    </div>
+  </div>
+
+  <!-- Bottom: Positions + Alerts -->
+  <div class="bottom-grid">
+
+    <!-- My Positions -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">💼 我的持仓</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="tag" id="posCountTag">0 条</span>
+          <span class="tag green" id="totalPnlTag" style="display:none">+0.00</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <!-- Summary cards -->
+        <div class="pos-summary" id="posSummary" style="display:none">
+          <div class="pos-summary-card">
+            <div class="pos-summary-label">总成本</div>
+            <div class="pos-summary-val" id="sumCost" style="color:var(--text)">--</div>
+          </div>
+          <div class="pos-summary-card">
+            <div class="pos-summary-label">总盈亏</div>
+            <div class="pos-summary-val" id="sumPnl">--</div>
+          </div>
+        </div>
+        <!-- Donut chart -->
+        <div class="pos-chart-wrap" id="posChartWrap" style="display:none">
+          <canvas class="pos-donut" id="posDonut"></canvas>
+          <div class="pos-legend" id="posLegend"></div>
+        </div>
+        <!-- Add form -->
+        <div class="form-row">
+          <select class="input" id="posMetal">
+            <option value="gold">黄金</option>
+            <option value="silver">白银</option>
+            <option value="copper">铜</option>
+            <option value="platinum">铂金</option>
+            <option value="palladium">钯金</option>
+          </select>
+          <input type="number" class="input" id="posPrice" placeholder="买入价 (CNY/g)" step="0.01" />
+          <input type="number" class="input" id="posWeight" placeholder="重量 (克)" step="0.01" />
+        </div>
+        <button class="btn active" onclick="addPosition()" style="width:100%;margin-bottom:14px">＋ 添加持仓</button>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>品种</th><th>买入</th><th>重量</th><th>现价</th><th>盈亏</th><th></th></tr></thead>
+            <tbody id="positionBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🔔 价格提醒</div>
+        <span class="tag amber" id="alertCountTag">0 条</span>
+      </div>
+      <div class="panel-body">
+        <div class="form-row">
+          <select class="input" id="alertMetal">
+            <option value="gold">黄金</option>
+            <option value="silver">白银</option>
+            <option value="copper">铜</option>
+            <option value="platinum">铂金</option>
+            <option value="palladium">钯金</option>
+          </select>
+          <select class="input" id="alertCond" style="max-width:110px">
+            <option value="gte">≥ 高于</option>
+            <option value="lte">≤ 低于</option>
+          </select>
+          <input type="number" class="input" id="alertPrice" placeholder="目标价 (CNY/g)" />
+        </div>
+        <button class="btn active" onclick="addAlert()" style="width:100%;margin-bottom:14px">＋ 添加提醒</button>
+        <div class="alert-list" id="alertList">
+          <div class="empty-hint">暂无提醒，请添加目标价格</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="section-title history-panel">历史数据查询</div>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">📋 历史数据</div>
+      <button class="btn btn-sm" onclick="exportCSV()">⬇ 导出 CSV</button>
+    </div>
+    <div class="panel-body">
+      <div class="form-row" style="margin-bottom:14px">
+        <select class="input" id="histMetal" onchange="renderHistory()" style="max-width:140px">
+          <option value="gold">黄金</option>
+          <option value="silver">白银</option>
+          <option value="copper">铜</option>
+          <option value="platinum">铂金</option>
+          <option value="palladium">钯金</option>
+        </select>
+        <input type="date" class="input" id="histFrom" onchange="renderHistory()" />
+        <input type="date" class="input" id="histTo" onchange="renderHistory()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>收盘价</th><th>涨跌</th><th>区间 (低~高)</th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toastContainer"></div>
+
+<script>
+// ======================== CONFIG ========================
+const METALS = {
+  gold:      { name:'黄金', en:'Gold',      sym:'Au', color:'#f0b429', base:5000, unit:'oz', grams:31.1035, vol:0.0012 },
+  silver:    { name:'白银', en:'Silver',    sym:'Ag', color:'#c0c8d8', base:79.2, unit:'oz', grams:31.1035, vol:0.0025 },
+  copper:    { name:'铜',   en:'Copper',    sym:'Cu', color:'#d4845a', base:4.90, unit:'lb', grams:453.592, vol:0.0018 },
+  platinum:  { name:'铂金', en:'Platinum',  sym:'Pt', color:'#a8c4d4', base:990,  unit:'oz', grams:31.1035, vol:0.0016 },
+  palladium: { name:'钯金', en:'Palladium', sym:'Pd', color:'#b4a8d4', base:960,  unit:'oz', grams:31.1035, vol:0.0022 },
+};
+const METAL_KEYS = Object.keys(METALS);
+
+const RATES = [
+  { pair:'USD/CNY', val:7.26, chg:+0.02 },
+  { pair:'USD/EUR', val:0.92, chg:-0.001 },
+  { pair:'USD/JPY', val:149.6, chg:+0.3 },
+  { pair:'GBP/USD', val:1.264, chg:+0.003 },
+];
+
+// ======================== STATE ========================
+let currentCurrency = 'CNY';
+let currentMetal = 'gold';
+let currentTimeframe = '24h';
+let USD_CNY = 7.26;
+let priceData = {};
+let historyDB = {};
+let alerts = [];
+let positions = [];
+let mainChart = null;
+let miniCharts = {};
+let posDonutChart = null;
+let fgIndex = 0;
+let dataSource = 'simulated';
+let apiError = null;
+let REFRESH_INTERVAL = 5; // seconds
+let countdown = REFRESH_INTERVAL;
+let autoTimer = null;
+let prevPrices = {};
+
+// ======================== CLOCK ========================
+function updateClocks() {
+  const now = new Date();
+  const fmt = (tz) => new Intl.DateTimeFormat('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false, timeZone:tz }).format(now);
+  document.getElementById('clk-cst').textContent = fmt('Asia/Shanghai');
+  document.getElementById('clk-lon').textContent = fmt('Europe/London');
+  document.getElementById('clk-nyc').textContent = fmt('America/New_York');
+}
+setInterval(updateClocks, 1000);
+updateClocks();
+
+// ======================== EXCHANGE RATES ========================
+function renderRates() {
+  document.getElementById('rateList').innerHTML = RATES.map(r => {
+    const up = r.chg >= 0;
+    return `<div class="rate-item">
+      <div class="rate-pair">${r.pair}</div>
+      <div class="rate-val">${r.val}</div>
+      <div class="rate-chg" style="color:${up?'var(--green)':'var(--red)'}">${up?'+':''}${r.chg}</div>
+    </div>`;
+  }).join('');
+}
+
+// ======================== FEAR & GREED ========================
+function calcFearGreed() {
+  // 综合涨跌幅计算市场情绪
+  let sum = 0;
+  METAL_KEYS.forEach(k => {
+    const pd = priceData[k];
+    if (pd) sum += pd.changePct;
+  });
+  const avg = sum / METAL_KEYS.length;
+  // avg范围约[-3,3] -> 映射到[0,100]
+  fgIndex = Math.min(100, Math.max(0, Math.round(50 + avg * 15)));
+  renderFearGreed();
+}
+
+function renderFearGreed() {
+  const val = fgIndex;
+  let label, color, desc;
+  if (val >= 75) { label='极度贪婪'; color='#e85d4a'; desc='市场过热，注意回调风险'; }
+  else if (val >= 55) { label='贪婪'; color='#f0b429'; desc='多头情绪主导，谨慎追高'; }
+  else if (val >= 45) { label='中性'; color='#8b90a0'; desc='多空平衡，震荡行情'; }
+  else if (val >= 25) { label='恐惧'; color='#4d9ef6'; desc='悲观情绪蔓延，关注支撑位'; }
+  else { label='极度恐惧'; color='#2ec4a9'; desc='市场超卖，可能存在机会'; }
+
+  document.getElementById('fgVal').textContent = val;
+  document.getElementById('fgVal').style.color = color;
+  document.getElementById('fgLabel').textContent = label;
+  document.getElementById('fgLabel').style.color = color;
+  document.getElementById('fgDesc').textContent = desc;
+  document.getElementById('fgIndicator').style.marginLeft = `calc(${val}% - 5px)`;
+
+  // Draw semicircle gauge
+  const canvas = document.getElementById('fgCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 100, 100);
+  // BG arc
+  ctx.beginPath(); ctx.arc(50, 60, 38, Math.PI, 2*Math.PI);
+  ctx.lineWidth = 10; ctx.strokeStyle = '#262c3e'; ctx.lineCap = 'round'; ctx.stroke();
+  // Value arc
+  const startAngle = Math.PI;
+  const endAngle = Math.PI + (val / 100) * Math.PI;
+  const gradient = ctx.createLinearGradient(12, 60, 88, 60);
+  gradient.addColorStop(0, '#2ec4a9'); gradient.addColorStop(0.5, '#f0b429'); gradient.addColorStop(1, '#e85d4a');
+  ctx.beginPath(); ctx.arc(50, 60, 38, startAngle, endAngle);
+  ctx.lineWidth = 10; ctx.strokeStyle = gradient; ctx.lineCap = 'round'; ctx.stroke();
+}
+
+// ======================== PRICE SIMULATION ========================
+function genSeries(base, points, vol) {
+  const arr = [];
+  let v = base;
+  for (let i = 0; i < points; i++) {
+    v = v * (1 + (Math.random() - 0.498) * vol * 4);
+    v = Math.max(v, base * 0.4);
+    arr.push(+v.toFixed(2));
+  }
+  return arr;
+}
+
+function buildLabels(tf) {
+  const now = new Date();
+  let points, stepMs, fmt;
+  if (tf === '24h') { points=48; stepMs=30*60000; fmt=d=>`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; }
+  else if (tf === '7d') { points=42; stepMs=4*3600000; fmt=d=>`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}h`; }
+  else if (tf === '30d') { points=60; stepMs=12*3600000; fmt=d=>`${d.getMonth()+1}/${d.getDate()}`; }
+  else { points=90; stepMs=24*3600000; fmt=d=>`${d.getMonth()+1}/${d.getDate()}`; }
+  const start = new Date(now - points * stepMs);
+  const labels = [];
+  for (let i = 0; i <= points; i++) labels.push(fmt(new Date(start.getTime() + i * stepMs)));
+  return { labels, points: points + 1 };
+}
+
+function initPrices(realPrices) {
+  METAL_KEYS.forEach(k => {
+    const m = METALS[k];
+    const base = realPrices?.[k] || m.base;
+    const h24 = genSeries(base, 48, m.vol);
+    const h7d = genSeries(base, 42, m.vol*1.6);
+    const h30d = genSeries(base, 60, m.vol*2.2);
+    const h90d = genSeries(base, 90, m.vol*3);
+    const price = h24[h24.length-1];
+    const prev = h24[0];
+    const change = +(price - prev).toFixed(2);
+    const changePct = +((change/prev)*100).toFixed(2);
+    priceData[k] = { price, change, changePct, history:{'24h':h24,'7d':h7d,'30d':h30d,'90d':h90d} };
+    prevPrices[k] = price;
+  });
+  // History DB
+  METAL_KEYS.forEach(k => {
+    const m = METALS[k];
+    const rows = [];
+    for (let i=29; i>=0; i--) {
+      const d = new Date(); d.setDate(d.getDate()-i);
+      const p = +(m.base * (1+(Math.random()-0.49)*0.03)).toFixed(2);
+      const h = +(p*(1+Math.random()*0.012)).toFixed(2);
+      const l = +(p*(1-Math.random()*0.012)).toFixed(2);
+      const prev2 = rows.length ? rows[rows.length-1].price : p;
+      rows.push({ date:d.toISOString().slice(0,10), price:p, high:h, low:l, change:+(p-prev2).toFixed(2) });
+    }
+    historyDB[k] = rows;
+  });
+}
+
+function tickPrices() {
+  METAL_KEYS.forEach(k => {
+    const m = METALS[k];
+    const pd = priceData[k];
+    prevPrices[k] = pd.price;
+    const newPrice = +(pd.price * (1 + (Math.random()-0.499) * m.vol)).toFixed(2);
+    pd.change = +(newPrice - pd.history['24h'][0]).toFixed(2);
+    pd.changePct = +((pd.change / pd.history['24h'][0]) * 100).toFixed(2);
+    pd.price = newPrice;
+    pd.history['24h'].push(newPrice);
+    pd.history['24h'].shift();
+  });
+}
+
+// ======================== CURRENCY ========================
+function toDisplay(metalKey, rawUSD) {
+  const m = METALS[metalKey];
+  if (currentCurrency === 'USD') return { val: rawUSD, fmt: rawUSD.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}), unit:`USD/${m.unit}` };
+  const cny = rawUSD * USD_CNY / m.grams;
+  return { val: cny, fmt: cny.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}), unit:'CNY/g' };
+}
+
+function setCurrency(c) {
+  currentCurrency = c;
+  document.getElementById('btnUSD').classList.toggle('active', c==='USD');
+  document.getElementById('btnCNY').classList.toggle('active', c==='CNY');
+  const unitHint = c==='CNY' ? 'CNY/g' : 'USD/oz';
+  document.getElementById('alertPrice').placeholder = `目标价 (${unitHint})`;
+  document.getElementById('posPrice').placeholder = `买入价 (${unitHint})`;
+  renderCards(); updateMainChart(); renderPositions(); renderAlerts(); renderHistory();
+}
+
+// ======================== CARDS ========================
+function renderCards() {
+  const grid = document.getElementById('metalsGrid');
+  grid.innerHTML = '';
+  METAL_KEYS.forEach(k => {
+    const m = METALS[k];
+    const pd = priceData[k];
+    const dp = toDisplay(k, pd.price);
+    const dir = pd.changePct > 0 ? 'up' : pd.changePct < 0 ? 'down' : 'flat';
+    const arrow = pd.changePct > 0 ? '▲' : pd.changePct < 0 ? '▼' : '—';
+    const isNew = prevPrices[k] !== undefined && prevPrices[k] !== pd.price;
+    const flashCls = isNew ? (pd.price >= prevPrices[k] ? ' flash-up' : ' flash-down') : '';
+
+    const card = document.createElement('div');
+    card.className = 'metal-card' + (k===currentMetal?' selected':'') + flashCls;
+    card.style.setProperty('--card-color', m.color);
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="metal-icon">${m.sym}</div>
+        <div class="metal-right">
+          <div class="metal-en">${m.en}</div>
+        </div>
+      </div>
+      <div class="metal-name">${m.name}</div>
+      <div class="metal-price">${dp.fmt}<span class="unit">${dp.unit}</span></div>
+      <div class="metal-change">
+        <span class="change-pill ${dir}">${arrow} ${Math.abs(pd.changePct).toFixed(2)}%</span>
+        <span class="change-abs">${pd.change>=0?'+':''}${pd.change.toFixed(2)}</span>
+      </div>
+      <div class="mini-chart-wrap"><canvas id="mini_${k}"></canvas></div>
+    `;
+    card.onclick = () => selectMetal(k);
+    grid.appendChild(card);
+    setTimeout(() => renderMiniChart(k), 0);
+  });
+}
+
+function renderMiniChart(k) {
+  const canvas = document.getElementById(`mini_${k}`);
+  if (!canvas) return;
+  const m = METALS[k]; const pd = priceData[k];
+  const data = pd.history['24h'];
+  if (miniCharts[k]) miniCharts[k].destroy();
+  miniCharts[k] = new Chart(canvas, {
+    type: 'line',
+    data: { labels: data.map((_,i)=>i), datasets: [{ data, borderColor: m.color, borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: true,
+      backgroundColor: ctx => { const g=ctx.chart.ctx.createLinearGradient(0,0,0,40); g.addColorStop(0,m.color+'33'); g.addColorStop(1,m.color+'00'); return g; }
+    }] },
+    options: { responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{display:false}}
+    }
+  });
+}
+
+// ======================== RANKING ========================
+function renderRanking() {
+  const sorted = [...METAL_KEYS].sort((a,b) => priceData[b].changePct - priceData[a].changePct);
+  const maxAbs = Math.max(...sorted.map(k => Math.abs(priceData[k].changePct))) || 1;
+  document.getElementById('rankingInner').innerHTML = sorted.map((k, idx) => {
+    const m = METALS[k]; const pd = priceData[k];
+    const pct = pd.changePct;
+    const isUp = pct >= 0;
+    const barW = Math.min(100, (Math.abs(pct) / maxAbs) * 100);
+    return `<div class="rank-item">
+      <div class="rank-num">${idx+1}</div>
+      <div class="rank-bar-wrap">
+        <div class="rank-label">
+          <span style="color:${m.color};font-weight:700">${m.sym}</span>
+          <span style="font-size:10px;color:var(--text2)">${m.name}</span>
+        </div>
+        <div class="rank-bar" style="width:${barW}%;background:${isUp?'var(--green)':'var(--red)'}"></div>
+      </div>
+      <div class="rank-pct" style="color:${isUp?'var(--green)':'var(--red)'}">${pct>=0?'+':''}${pct.toFixed(2)}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ======================== MAIN CHART ========================
+function selectMetal(k) { currentMetal=k; renderCards(); updateMainChart(); }
+function setTimeframe(tf, btn) {
+  currentTimeframe=tf;
+  document.querySelectorAll('[data-tf]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateMainChart();
+}
+
+function updateMainChart() {
+  const m = METALS[currentMetal]; const pd = priceData[currentMetal];
+  const rawSeries = pd.history[currentTimeframe];
+  const { labels } = buildLabels(currentTimeframe);
+  const series = currentCurrency==='CNY'
+    ? rawSeries.map(v => +(v*USD_CNY/m.grams).toFixed(4))
+    : rawSeries;
+
+  const dp = toDisplay(currentMetal, pd.price);
+  document.getElementById('chartTitle').textContent = `${m.name} · ${m.en}`;
+  document.getElementById('chartSub').textContent = `${currentTimeframe==='24h'?'近24小时':currentTimeframe==='7d'?'近7天':currentTimeframe==='30d'?'近30天':'近90天'} 价格走势`;
+  document.getElementById('chartPriceLarge').textContent = dp.fmt;
+  document.getElementById('chartPriceLarge').style.color = m.color;
+
+  const dir = pd.changePct>=0?'up':'down'; const arrow=pd.changePct>=0?'▲':'▼';
+  const badge = document.getElementById('chartChangeBadge');
+  badge.textContent = `${arrow} ${Math.abs(pd.changePct).toFixed(2)}%`;
+  badge.className = `change-pill ${dir}`;
+  document.getElementById('chartChangeAbs').textContent = `${pd.change>=0?'+':''}${pd.change.toFixed(2)} USD/oz`;
+
+  const high=Math.max(...series), low=Math.min(...series);
+  const avg=series.reduce((a,b)=>a+b,0)/series.length;
+  const f = v => currentCurrency==='USD'?v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):v.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const ul = currentCurrency==='USD'?`USD/${m.unit}`:'CNY/g';
+  document.getElementById('statHigh').textContent = `${f(high)} ${ul}`;
+  document.getElementById('statLow').textContent  = `${f(low)} ${ul}`;
+  document.getElementById('statAvg').textContent  = `${f(avg)} ${ul}`;
+  document.getElementById('statVol').textContent  = (((high-low)/low)*100).toFixed(2)+'%';
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  if (mainChart) mainChart.destroy();
+  mainChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels.slice(0,series.length),
+      datasets: [{
+        label:`${m.name}(${ul})`, data: series,
+        borderColor: m.color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 6,
+        pointHoverBackgroundColor: m.color, tension: 0.4, fill: true,
+        backgroundColor: ctx2 => { const g=ctx2.chart.ctx.createLinearGradient(0,0,0,260); g.addColorStop(0,m.color+'44'); g.addColorStop(1,m.color+'00'); return g; }
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1a1e2a', borderColor:'#262c3e', borderWidth:1,
+          titleColor:'#8b90a0', bodyColor:'#e8eaf0', padding:10,
+          callbacks:{ label: c=>` ${f(c.parsed.y)} ${ul}` }
+        }
+      },
+      scales:{
+        x:{ grid:{color:'#262c3e55',drawTicks:false}, ticks:{color:'#4a5068',maxTicksLimit:8,font:{size:10}} },
+        y:{ position:'right', grid:{color:'#262c3e55',drawTicks:false}, ticks:{color:'#4a5068',font:{size:10},callback:v=>f(v)} }
+      }
+    }
+  });
+}
+
+// ======================== POSITIONS ========================
+function addPosition() {
+  const metal = document.getElementById('posMetal').value;
+  const price = parseFloat(document.getElementById('posPrice').value);
+  const weight = parseFloat(document.getElementById('posWeight').value);
+  if (!price||price<=0) { showToast('⚠️','请输入有效的买入价格'); return; }
+  if (!weight||weight<=0) { showToast('⚠️','请输入有效的重量'); return; }
+  positions.push({ id:Date.now(), metal, price, weight, currency:currentCurrency });
+  document.getElementById('posPrice').value = '';
+  document.getElementById('posWeight').value = '';
+  renderPositions();
+  showToast('💼',`已添加 ${METALS[metal].name} 持仓 ${weight}g @ ${price} ${currentCurrency==='CNY'?'CNY/g':'USD/oz'}`);
+}
+
+function removePosition(id) { positions=positions.filter(p=>p.id!==id); renderPositions(); }
+
+function calcPnL(pos) {
+  const curUSD = priceData[pos.metal]?.price || 0;
+  const m = METALS[pos.metal];
+  // Convert buy price to USD/oz
+  let buyUSD = pos.currency==='CNY' ? pos.price*m.grams/USD_CNY : pos.price;
+  // cost & value in USD
+  const costUSD = buyUSD * pos.weight / m.grams * m.grams; // = buyUSD * weight (weight in grams, price per oz)
+  const valUSD  = curUSD * pos.weight / m.grams * m.grams;
+  // Actually: cost = buyUSD/grams * weight_g ; value = curUSD/grams * weight_g
+  const costPerG = buyUSD / m.grams;
+  const curPerG  = curUSD / m.grams;
+  const cost  = costPerG * pos.weight;
+  const value = curPerG  * pos.weight;
+  const pnl = value - cost; // USD
+  const pnlPct = cost>0 ? (pnl/cost)*100 : 0;
+  // Display in current currency
+  const displayPnl = currentCurrency==='CNY' ? pnl*USD_CNY : pnl;
+  const displayCost = currentCurrency==='CNY' ? cost*USD_CNY : cost;
+  return { pnl, displayPnl, displayCost, pnlPct, curUSD };
+}
+
+function renderPositions() {
+  const tbody = document.getElementById('positionBody');
+  const countTag = document.getElementById('posCountTag');
+  const pnlTag = document.getElementById('totalPnlTag');
+  const summaryEl = document.getElementById('posSummary');
+  const chartWrap = document.getElementById('posChartWrap');
+
+  countTag.textContent = `${positions.length} 条`;
+  if (!positions.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-hint">暂无持仓，请添加</div></td></tr>`;
+    pnlTag.style.display='none';
+    summaryEl.style.display='none';
+    chartWrap.style.display='none';
+    return;
+  }
+
+  let totalCost=0, totalPnl=0;
+  const rows = positions.map(p => {
+    const m = METALS[p.metal];
+    const { displayPnl, displayCost, pnlPct, curUSD } = calcPnL(p);
+    totalPnl += displayPnl; totalCost += displayCost;
+    const dcur = toDisplay(p.metal, curUSD);
+    const buyFmt = p.currency==='CNY' ? `${p.price.toFixed(2)} CNY/g` : `${p.price.toFixed(2)} USD/${m.unit}`;
+    const isP = displayPnl>=0;
+    return `<tr>
+      <td><span style="color:${m.color};font-weight:700">${m.sym}</span> ${m.name}</td>
+      <td style="font-size:11px;color:var(--text2)">${buyFmt}</td>
+      <td>${p.weight}g</td>
+      <td>${dcur.fmt} <span style="font-size:10px;color:var(--text3)">${dcur.unit}</span></td>
+      <td class="pnl-cell ${isP?'profit':'loss'}">${isP?'+':''}${displayPnl.toFixed(2)}<br><span style="font-size:10px">${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%</span></td>
+      <td><button class="btn btn-sm btn-danger" onclick="removePosition(${p.id})">删除</button></td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows.join('');
+
+  // Summary cards
+  summaryEl.style.display='grid';
+  const ul = currentCurrency==='CNY'?'CNY':'USD';
+  document.getElementById('sumCost').textContent = `${totalCost.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})} ${ul}`;
+  document.getElementById('sumPnl').textContent  = `${totalPnl>=0?'+':''}${totalPnl.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})} ${ul}`;
+  document.getElementById('sumPnl').className = `pos-summary-val ${totalPnl>=0?'profit':'loss'}`;
+
+  pnlTag.style.display='flex';
+  pnlTag.textContent = `${totalPnl>=0?'+':''}${totalPnl.toFixed(2)} ${ul}`;
+  pnlTag.className = `tag ${totalPnl>=0?'green':'red'}`;
+
+  // Donut chart: allocation by cost
+  chartWrap.style.display='flex';
+  const metalMap = {};
+  positions.forEach(p => {
+    const { displayCost } = calcPnL(p);
+    metalMap[p.metal] = (metalMap[p.metal]||0) + displayCost;
+  });
+  const donutLabels = Object.keys(metalMap).map(k => METALS[k].name);
+  const donutData = Object.values(metalMap);
+  const donutColors = Object.keys(metalMap).map(k => METALS[k].color);
+  const donutCanvas = document.getElementById('posDonut');
+  if (posDonutChart) posDonutChart.destroy();
+  posDonutChart = new Chart(donutCanvas, {
+    type: 'doughnut',
+    data: { labels:donutLabels, datasets:[{ data:donutData, backgroundColor:donutColors, borderWidth:2, borderColor:'#13161f', hoverOffset:4 }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'70%', plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#1a1e2a', borderColor:'#262c3e', borderWidth:1 } } }
+  });
+  document.getElementById('posLegend').innerHTML = Object.keys(metalMap).map((k,i) => {
+    const pct = ((donutData[i]/donutData.reduce((a,b)=>a+b,0))*100).toFixed(1);
+    return `<div class="pos-legend-item"><div class="pos-legend-dot" style="background:${donutColors[i]}"></div><span style="color:var(--text2)">${METALS[k].name}</span><span style="margin-left:auto;font-weight:700">${pct}%</span></div>`;
+  }).join('');
+}
+
+// ======================== ALERTS ========================
+function addAlert() {
+  const metal = document.getElementById('alertMetal').value;
+  const cond  = document.getElementById('alertCond').value;
+  const price = parseFloat(document.getElementById('alertPrice').value);
+  if (!price||price<=0) { showToast('⚠️','请输入有效的目标价格'); return; }
+  const ul = currentCurrency==='CNY'?'CNY/g':`USD/${METALS[metal].unit}`;
+  alerts.push({ id:Date.now(), metal, cond, price, currency:currentCurrency, ul });
+  document.getElementById('alertPrice').value='';
+  renderAlerts();
+  showToast('🔔',`已添加 ${METALS[metal].name} ${cond==='gte'?'≥':'≤'} ${price} ${ul}`);
+}
+
+function removeAlert(id) { alerts=alerts.filter(a=>a.id!==id); renderAlerts(); }
+
+function getDisplayPrice(metalKey, currency) {
+  const rawUSD = priceData[metalKey]?.price||0;
+  const m = METALS[metalKey];
+  return currency==='CNY' ? rawUSD*USD_CNY/m.grams : rawUSD;
+}
+
+function renderAlerts() {
+  document.getElementById('alertCountTag').textContent = `${alerts.length} 条`;
+  const list = document.getElementById('alertList');
+  if (!alerts.length) { list.innerHTML=`<div class="empty-hint">暂无提醒，请添加目标价格</div>`; return; }
+  list.innerHTML = alerts.map(a => {
+    const m = METALS[a.metal];
+    const condStr = a.cond==='gte'?'≥':'≤';
+    const cur = getDisplayPrice(a.metal, a.currency);
+    const triggered = (a.cond==='gte'&&cur>=a.price)||(a.cond==='lte'&&cur<=a.price);
+    const curFmt = cur.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return `<div class="alert-item">
+      <div>
+        <div style="font-weight:700;font-size:13px;color:${m.color}">${m.name} ${condStr} ${a.price} ${a.ul}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">当前: ${curFmt} ${a.ul}${triggered?' · <span style="color:var(--green)">已触发 ✓</span>':''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${triggered?'<span class="alert-triggered">已触发</span>':'<span class="alert-badge">监控中</span>'}
+        <span class="alert-del" onclick="removeAlert(${a.id})">✕</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function checkAlerts() {
+  alerts.forEach(a => {
+    const cur = getDisplayPrice(a.metal, a.currency);
+    const triggered = (a.cond==='gte'&&cur>=a.price)||(a.cond==='lte'&&cur<=a.price);
+    if (triggered) {
+      const cond = a.cond==='gte'?'≥':'≤';
+      showToast('🔔',`${METALS[a.metal].name} 已达 ${cur.toFixed(2)} ${a.ul}，触发 ${cond} ${a.price} 提醒！`);
+    }
+  });
+}
+
+// ======================== HISTORY ========================
+function renderHistory() {
+  const metal = document.getElementById('histMetal').value;
+  const from  = document.getElementById('histFrom').value;
+  const to    = document.getElementById('histTo').value;
+  let rows = (historyDB[metal]||[]).filter(r => (!from||r.date>=from)&&(!to||r.date<=to));
+  const m = METALS[metal];
+  const fmtP = v => currentCurrency==='USD'
+    ? v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})
+    : (v*USD_CNY/m.grams).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const ul = currentCurrency==='USD'?`USD/${m.unit}`:'CNY/g';
+  const tbody = document.getElementById('historyBody');
+  if (!rows.length) { tbody.innerHTML=`<tr><td colspan="4"><div class="empty-hint">暂无数据</div></td></tr>`; return; }
+  tbody.innerHTML = rows.slice(-20).reverse().map(r => {
+    const dir = r.change>=0?'up':'down'; const arrow=r.change>=0?'▲':'▼';
+    return `<tr>
+      <td style="color:var(--text2)">${r.date}</td>
+      <td style="font-weight:700">${fmtP(r.price)} <span style="font-size:10px;color:var(--text3)">${ul}</span></td>
+      <td><span class="change-pill ${dir}" style="font-size:11px">${arrow} ${Math.abs(r.change).toFixed(2)}</span></td>
+      <td style="font-size:11px;color:var(--text3)">${fmtP(r.low)} ~ ${fmtP(r.high)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportCSV() {
+  const metal = document.getElementById('histMetal').value;
+  const from  = document.getElementById('histFrom').value;
+  const to    = document.getElementById('histTo').value;
+  let rows = (historyDB[metal]||[]).filter(r=>(!from||r.date>=from)&&(!to||r.date<=to));
+  const m = METALS[metal];
+  const lines = ['日期,收盘价(USD/oz),收盘价(CNY/g),最高价(CNY/g),最低价(CNY/g),涨跌额(USD)'];
+  rows.forEach(r => {
+    const c  = (r.price*USD_CNY/m.grams).toFixed(4);
+    const ch = (r.high *USD_CNY/m.grams).toFixed(4);
+    const cl = (r.low  *USD_CNY/m.grams).toFixed(4);
+    lines.push(`${r.date},${r.price},${c},${ch},${cl},${r.change}`);
+  });
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=`${metal}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅',`已导出 ${m.name} 历史数据`);
+}
+
+// ======================== AUTO REFRESH ========================
+function updateTimestamp() {
+  const now = new Date();
+  const s = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  document.getElementById('lastUpdate').textContent = `更新于 ${s}`;
+  const dot = document.getElementById('statusDot');
+  dot.className = `status-dot ${dataSource==='api'?'online':'simulated'}`;
+}
+
+function updateSourceBadge() {
+  const badge = document.getElementById('sourceBadge');
+  if (dataSource==='api') { badge.textContent='🌐 实时'; badge.className='source-badge live'; }
+  else { badge.textContent='🎲 模拟'; badge.className='source-badge sim'; }
+}
+
+function updateRing() {
+  const total = REFRESH_INTERVAL;
+  const circumference = 2*Math.PI*13; // r=13
+  const offset = circumference * (1 - countdown/total);
+  document.getElementById('ringProgress').style.strokeDashoffset = offset;
+  document.getElementById('ringText').textContent = countdown;
+}
+
+function startAutoRefresh() {
+  clearInterval(autoTimer);
+  countdown = REFRESH_INTERVAL;
+  autoTimer = setInterval(() => {
+    countdown--;
+    updateRing();
+    if (countdown <= 0) {
+      tickPrices();
+      renderCards();
+      if (currentMetal) updateMainChart();
+      renderRanking();
+      renderPositions();
+      checkAlerts();
+      renderAlerts();
+      updateTimestamp();
+      calcFearGreed();
+      countdown = REFRESH_INTERVAL;
+    }
+  }, 1000);
+}
+
+function manualRefresh() {
+  document.getElementById('ringText').textContent = '…';
+  document.getElementById('ringProgress').style.strokeDashoffset = 0;
+  setTimeout(() => {
+    tickPrices();
+    renderCards();
+    updateMainChart();
+    renderRanking();
+    renderPositions();
+    checkAlerts();
+    renderAlerts();
+    renderHistory();
+    updateTimestamp();
+    calcFearGreed();
+    countdown = REFRESH_INTERVAL;
+    updateRing();
+    showToast('✅','数据已手动刷新');
+  }, 300);
+}
+
+// ======================== TOAST ========================
+let toastTimers = {};
+function showToast(icon, msg) {
+  const container = document.getElementById('toastContainer');
+  const id = 't' + Date.now();
+  const el = document.createElement('div');
+  el.className = 'toast-item'; el.id = id;
+  el.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  container.appendChild(el);
+  // Max 4 toasts
+  const items = container.querySelectorAll('.toast-item');
+  if (items.length > 4) items[0].remove();
+  toastTimers[id] = setTimeout(() => {
+    const t = document.getElementById(id);
+    if (t) { t.style.animation='slideOut 0.3s ease forwards'; setTimeout(()=>t?.remove(),300); }
+  }, 4000);
+}
+
+// ======================== API ========================
+async function fetchRealPrices() {
+  try {
+    const res = await fetch('https://api.fg-a.com/gold-silver-including-scrap', { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const prices = {};
+    if (data.results) {
+      data.results.forEach(item => {
+        if (item.currency==='CNY'&&item.gram) {
+          if (item.metal==='gold')   prices.gold   = +(+item.gram * 31.1035).toFixed(2);
+          if (item.metal==='silver') prices.silver = +(+item.gram * 31.1035).toFixed(2);
+        }
+      });
+    }
+    if (Object.keys(prices).length > 0) { dataSource='api'; updateSourceBadge(); return prices; }
+    throw new Error('no usable data');
+  } catch(e) {
+    console.warn('API failed:', e.message);
+    apiError = e.message; dataSource='simulated'; updateSourceBadge(); return null;
+  }
+}
+
+// ======================== INIT ========================
+async function init() {
+  const today = new Date().toISOString().slice(0,10);
+  const month = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  document.getElementById('histFrom').value = month;
+  document.getElementById('histTo').value = today;
+
+  renderRates();
+
+  const realPrices = await fetchRealPrices();
+  initPrices(realPrices);
+
+  renderCards();
+  updateMainChart();
+  renderRanking();
+  renderPositions();
+  renderAlerts();
+  renderHistory();
+  updateTimestamp();
+  updateSourceBadge();
+  calcFearGreed();
+  startAutoRefresh();
+
+  showToast('📊', `行情看板 V3 已就绪 · ${REFRESH_INTERVAL}秒自动刷新${dataSource==='simulated'?' · 模拟数据':' · 实时数据'}`);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
